@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{fmt, ops::{Range, RangeInclusive}};
 
 /// Represents the substring of a `&str`
 #[derive(Debug, Clone, Copy)]
@@ -23,14 +23,18 @@ impl<'a> Span<'a> {
         &self.data[self.first_byte..self.last_byte]
     }
 
+    pub fn first_char(&self) -> Option<char> {
+        self.spanned().chars().next()
+    }
+
     /// Consume a range of characters
     /// Returns the consumed chars if any
-    pub fn consume(&mut self, valid: &str) -> Option<Self> {
+    pub fn consume<CC: ContainsChar>(&mut self, valid: CC) -> Option<Self> {
         let mut chars = self.spanned().char_indices().peekable();
         let mut consumed_bytes = 0;
         // let mut consumed_chars = 0;
         while let Some((b, c)) = chars.peek() {
-            if valid.contains(*c) {
+            if valid.contains_char(*c) {
                 // In theory, we don't need `b` anymore
                 consumed_bytes = b + bytes_per_char(*c);
                 // consumed_chars += 1;
@@ -55,20 +59,55 @@ impl<'a> Span<'a> {
     }
 }
 
+impl<'a> fmt::Display for Span<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {}:{}", self.spanned(), self.first_byte, self.last_byte)
+    }
+}
+
+pub trait ContainsChar {
+    fn contains_char(&self, c: char) -> bool;
+}
+
+impl ContainsChar for char {
+    fn contains_char(&self, c: char) -> bool {
+        *self == c
+    }
+}
+
+impl<'a> ContainsChar for &'a str {
+    fn contains_char(&self, c: char) -> bool {
+        self.contains(c)
+    }
+}
+
+impl ContainsChar for Range<char> {
+    fn contains_char(&self, c: char) -> bool {
+        self.contains(&c)
+    }
+}
+
+impl ContainsChar for RangeInclusive<char> {
+    fn contains_char(&self, c: char) -> bool {
+        self.contains(&c)
+    }
+}
+
+impl<A, B> ContainsChar for (A, B)
+where A: ContainsChar, B: ContainsChar {
+    fn contains_char(&self, c: char) -> bool {
+        self.0.contains_char(c) || self.1.contains_char(c)
+    }
+}
+
 fn bytes_per_char(c: char) -> usize {
     let u = c as usize;
-    let mut bytes = 0;
-    if u & 0x00_00_00_FF != 0 {
-        bytes += 1;
-    }
+    let mut bytes = 1;
     if u & 0x00_00_FF_00 != 0 {
         bytes += 1;
     }
     if u & 0x00_FF_00_00 != 0 {
-        bytes += 1;
-    }
-    if u & 0xFF_00_00_00 != 0 {
-        bytes += 1;
+        bytes += 2;
     }
     bytes
 }
@@ -81,7 +120,15 @@ mod tests {
     fn test_bytes_per_char() {
         assert_eq!(1, bytes_per_char('c'));
         assert_eq!(2, bytes_per_char('Č'));
-        assert_eq!(3, bytes_per_char('🚀'));
+        assert_eq!(4, bytes_per_char('🚀'));
+    }
+
+    #[test]
+    fn first_char() {
+        let mut span = Span::new("aaaa🚀🚀🚀aaaa");
+        println!("{}", span.consume("a").unwrap());
+        println!("{}", span.consume("🚀").unwrap());
+        println!("{}", span.consume("a").unwrap());
     }
 
     #[test]
@@ -98,7 +145,6 @@ mod tests {
         let consumed = span.consume(" ").unwrap();
         assert_eq!("     ", consumed.spanned());
         assert_eq!("654324987321654", span.spanned());
-        println!("HERE!");
         let consumed = span.consume("0123456789").unwrap();
         assert_eq!("654324987321654", consumed.spanned());
         assert_eq!("", span.spanned());
