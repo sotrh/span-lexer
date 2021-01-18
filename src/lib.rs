@@ -82,7 +82,7 @@ mod tests {
 
     #[test]
     fn lexer_next() {
-        let input = "This is a test!";
+        let input = "This is\n a test!";
         let mut lexer = Lexer::new(input);
         let expected = vec![
             Some(Token::Word(span("This"))),
@@ -95,6 +95,18 @@ mod tests {
             let t = lexer.next();
             println!("{:?}, {:?}", e, t);
             assert!(tokens_match(e, t));
+        }
+    }
+
+    #[test]
+    fn readme() {
+        let mut lexer = Lexer::new("This is a test. 🚀");
+        let token = lexer.next();
+        match token {
+            Some(Token::Word(span)) => {
+                assert_eq!("This", &*span);
+            }
+            _ => unreachable!(),
         }
     }
 }

@@ -1,4 +1,4 @@
-use std::{fmt, ops::{Range, RangeInclusive}};
+use std::{fmt, ops::{Deref, Range, RangeInclusive}};
 
 /// Represents the substring of a `&str`
 #[derive(Debug, Clone, Copy)]
@@ -62,6 +62,14 @@ impl<'a> Span<'a> {
 impl<'a> fmt::Display for Span<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} {}:{}", self.spanned(), self.first_byte, self.last_byte)
+    }
+}
+
+impl Deref for Span<'_> {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.spanned()
     }
 }
 
@@ -148,5 +156,11 @@ mod tests {
         let consumed = span.consume("0123456789").unwrap();
         assert_eq!("654324987321654", consumed.spanned());
         assert_eq!("", span.spanned());
+    }
+
+    #[test]
+    fn spanned_empty() {
+        let span = Span::new("");
+        assert_eq!("", &*span);
     }
 }
