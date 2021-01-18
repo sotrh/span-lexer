@@ -1,6 +1,6 @@
 # Span Lexer
 
-A lexer that returns Tokens with the span information of the original text. **Note: this is just an example. This project is a proof of concept and not designed to be used.** That being said, the code is MIT/APACHE at the users discretion.
+A lexer that returns Tokens with the span information of the original text. The lexer does not modify the text it lexes, nore does it allocate. **Note: this is just an example. This project is a proof of concept and not designed to be used.** That being said, the code is MIT/APACHE at the users discretion.
 
 The implementation here leverages the `CharIndices` trait on `&str` to compute the start and end of a span. This example has been built to support most UTF-8 characters including multi byte characters such as 🚀. The core of the code is the `Span` struct found in `src/span.rs`.
 

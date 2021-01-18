@@ -1,9 +1,14 @@
-use std::{fmt, ops::{Deref, Range, RangeInclusive}};
+use std::{
+    fmt,
+    ops::{Deref, Range, RangeInclusive},
+};
 
 /// Represents the substring of a `&str`
 #[derive(Debug, Clone, Copy)]
 pub struct Span<'a> {
     data: &'a str,
+    line_num: usize,
+    col_num: usize,
     pub(crate) first_byte: usize,
     pub(crate) last_byte: usize,
 }
@@ -13,6 +18,8 @@ impl<'a> Span<'a> {
     pub fn new(data: &'a str) -> Self {
         Self {
             data,
+            line_num: 1,
+            col_num: 1,
             first_byte: 0,
             last_byte: data.as_bytes().len(),
         }
@@ -32,12 +39,17 @@ impl<'a> Span<'a> {
     pub fn consume<CC: ContainsChar>(&mut self, valid: CC) -> Option<Self> {
         let mut chars = self.spanned().char_indices().peekable();
         let mut consumed_bytes = 0;
-        // let mut consumed_chars = 0;
+        let mut consumed_lines = 0;
+        let mut consumed_chars = self.col_num;
         while let Some((b, c)) = chars.peek() {
             if valid.contains_char(*c) {
+                if *c == '\n' {
+                    consumed_lines += 1;
+                    consumed_chars = 0;
+                }
                 // In theory, we don't need `b` anymore
                 consumed_bytes = b + bytes_per_char(*c);
-                // consumed_chars += 1;
+                consumed_chars += 1;
                 chars.next();
             } else {
                 break;
@@ -47,9 +59,17 @@ impl<'a> Span<'a> {
         if consumed_bytes > 0 {
             let old_first_byte = self.first_byte;
             let new_first_byte = self.first_byte + consumed_bytes;
+            let old_line_num = self.line_num;
+            let old_col_num = self.col_num;
+
             self.first_byte = new_first_byte;
+            self.line_num += consumed_lines;
+            self.col_num = consumed_chars;
+            
             Some(Span {
                 data: self.data,
+                line_num: old_line_num,
+                col_num: old_col_num,
                 first_byte: old_first_byte,
                 last_byte: new_first_byte,
             })
@@ -61,7 +81,13 @@ impl<'a> Span<'a> {
 
 impl<'a> fmt::Display for Span<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {}:{}", self.spanned(), self.first_byte, self.last_byte)
+        write!(
+            f,
+            "{} {}:{}",
+            self.spanned(),
+            self.line_num,
+            self.col_num,
+        )
     }
 }
 
@@ -102,7 +128,10 @@ impl ContainsChar for RangeInclusive<char> {
 }
 
 impl<A, B> ContainsChar for (A, B)
-where A: ContainsChar, B: ContainsChar {
+where
+    A: ContainsChar,
+    B: ContainsChar,
+{
     fn contains_char(&self, c: char) -> bool {
         self.0.contains_char(c) || self.1.contains_char(c)
     }
@@ -162,5 +191,23 @@ mod tests {
     fn spanned_empty() {
         let span = Span::new("");
         assert_eq!("", &*span);
+    }
+
+    #[test]
+    fn consume_newlines() {
+        let mut span = Span::new("Hello\nWorld!");
+        assert_eq!(1, span.line_num);
+        assert_eq!(1, span.col_num);
+        let expected = vec![(1, 1, "Hello"), (1, 6, "\n"), (2, 1, "World"), (2, 6, "!")];
+        let actual = vec!['A'..='z', '\n'..='\n', 'A'..='z', '!'..='!']
+            .into_iter()
+            .map(|r| {
+                println!("map {:?}", r);
+                let consumed = span.consume(r).unwrap();
+                println!("{:?}", consumed);
+                (consumed.line_num, consumed.col_num, consumed.spanned())
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(expected, actual);
     }
 }
